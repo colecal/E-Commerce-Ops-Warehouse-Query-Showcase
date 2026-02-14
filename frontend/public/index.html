@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E-Commerce Ops Warehouse Query Showcase</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <div>
+      <div class="kicker">Warehouse Query Showcase</div>
+      <h1>E-Commerce Ops Analytics (Postgres + FastAPI)</h1>
+      <p class="sub">Curated advanced SQL queries (cohorts, LTV, funnel, anomalies, returns, shipping SLA). Read-only API + simple UI.</p>
+    </div>
+    <div class="pill">
+      <div class="pill-row"><span class="dot"></span><span id="health">Checking API…</span></div>
+      <div class="pill-row dim"><span>Local:</span> <code>http://localhost:8000</code></div>
+      <div class="pill-row dim"><span>API:</span> <code>/api/queries</code></div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Run a query</h2>
+      <div class="controls">
+        <label>Start date <input id="startDate" type="date" /></label>
+        <label>End date <input id="endDate" type="date" /></label>
+        <label>Start month <input id="startMonth" type="date" /></label>
+        <label>End month <input id="endMonth" type="date" /></label>
+        <button id="refresh">Refresh list</button>
+      </div>
+      <div id="queryCards" class="cards"></div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <h2 id="resultTitle">Results</h2>
+        <div class="meta" id="resultMeta"></div>
+      </div>
+      <canvas id="chart" height="160"></canvas>
+      <div class="table-wrap">
+        <table id="resultTable"></table>
+      </div>
+      <details class="raw">
+        <summary>Raw JSON</summary>
+        <pre id="rawJson"></pre>
+      </details>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Tip: This UI is intentionally framework-free. The backend only exposes curated SQL — no arbitrary SQL execution.</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

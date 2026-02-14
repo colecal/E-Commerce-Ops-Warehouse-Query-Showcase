@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E-Commerce Ops Warehouse Query Showcase (Static Demo)</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <div>
+      <div class="kicker">Static (GitHub Pages) Demo</div>
+      <h1>E-Commerce Ops Analytics UI</h1>
+      <p class="sub">This demo runs entirely static using precomputed JSON responses committed in <code>pages_demo/mock_output/</code>.</p>
+    </div>
+    <div class="pill">
+      <div class="pill-row"><span class="dot ok"></span><span id="health">Static mode · mocked API</span></div>
+      <div class="pill-row dim"><span>Tip:</span> run the real API locally with docker-compose for live queries.</div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Run a query</h2>
+      <div class="controls">
+        <label>Start date <input id="startDate" type="date" disabled /></label>
+        <label>End date <input id="endDate" type="date" disabled /></label>
+        <label>Start month <input id="startMonth" type="date" disabled /></label>
+        <label>End month <input id="endMonth" type="date" disabled /></label>
+        <button id="refresh">Load queries</button>
+      </div>
+      <div id="queryCards" class="cards"></div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <h2 id="resultTitle">Results</h2>
+        <div class="meta" id="resultMeta"></div>
+      </div>
+      <canvas id="chart" height="160"></canvas>
+      <div class="table-wrap">
+        <table id="resultTable"></table>
+      </div>
+      <details class="raw">
+        <summary>Raw JSON</summary>
+        <pre id="rawJson"></pre>
+      </details>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Static demo — no backend required.</span>
+  </footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let chart;
+
+    function tableFrom(cols, rows){
+      const t = $("resultTable");
+      t.innerHTML = '';
+      if(cols.length === 0){
+        t.innerHTML = '<tr><td style="padding:12px; color: rgba(255,255,255,.65)">No rows returned.</td></tr>';
+        return;
+      }
+      const thead = document.createElement('thead');
+      const trh = document.createElement('tr');
+      for(const c of cols){
+        const th = document.createElement('th'); th.textContent = c; trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+      t.appendChild(thead);
+      const tb = document.createElement('tbody');
+      for(const r of rows.slice(0, 400)){
+        const tr = document.createElement('tr');
+        for(const v of r){
+          const td = document.createElement('td');
+          td.textContent = (v === null || v === undefined) ? '' : String(v);
+          tr.appendChild(td);
+        }
+        tb.appendChild(tr);
+      }
+      t.appendChild(tb);
+    }
+
+    function destroyChart(){ if(chart){ chart.destroy(); chart = undefined; } }
+
+    function plotIfPossible(result){
+      destroyChart();
+      const canvas = $("chart");
+      const {columns, rows, query_id} = result;
+      if(rows.length === 0) return;
+      const xIdx = 0;
+      const yIdx = Math.min(2, columns.length-1);
+      if(yIdx <= 0) return;
+      const pts = rows.map(r => ({x: r[xIdx], y: Number(r[yIdx])})).filter(p => Number.isFinite(p.y));
+      if(pts.length < 3) return;
+      chart = new Chart(canvas, {
+        type: 'line',
+        data: { datasets: [{ label: `${query_id}: ${columns[yIdx]}`, data: pts, borderColor: 'rgba(124,92,255,.95)', backgroundColor: 'rgba(124,92,255,.25)', borderWidth:2, pointRadius:0, tension:0.25 }] },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: 'rgba(255,255,255,.8)' } } },
+          scales: {
+            x: { ticks: { color: 'rgba(255,255,255,.65)' }, grid: { color: 'rgba(255,255,255,.06)' } },
+            y: { ticks: { color: 'rgba(255,255,255,.65)' }, grid: { color: 'rgba(255,255,255,.06)' } },
+          }
+        }
+      });
+    }
+
+    function renderCards(queries){
+      const wrap = $("queryCards");
+      wrap.innerHTML = '';
+      for(const q of queries){
+        const div = document.createElement('div');
+        div.className = 'qcard';
+        div.innerHTML = `<div class="qtitle"><strong>${q.title}</strong><span class="qid">${q.id}</span></div><div class="qdesc">${q.description}</div>`;
+        div.onclick = ()=> runQuery(q);
+        wrap.appendChild(div);
+      }
+    }
+
+    async function runQuery(q){
+      $("resultTitle").textContent = q.title;
+      $("resultMeta").textContent = 'Loading mocked JSON…';
+      const r = await fetch(`./mock_output/${q.id}.json`);
+      const j = await r.json();
+      $("resultMeta").textContent = `${j.row_count} rows · precomputed`; 
+      $("rawJson").textContent = JSON.stringify(j, null, 2);
+      tableFrom(j.columns, j.rows);
+      plotIfPossible(j);
+    }
+
+    async function refresh(){
+      const r = await fetch('./mock_output/queries.json');
+      const j = await r.json();
+      renderCards(j.queries);
+    }
+
+    $("refresh").onclick = refresh;
+    refresh();
+  </script>
+</body>
+</html>
