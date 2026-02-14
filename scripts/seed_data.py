@@ -70,13 +70,13 @@ async def seed_all(conn: asyncpg.Connection) -> None:
 
     # Orders + items + payments + shipments + refunds
     order_rows = []
-    order_items_rows = []
+    order_items_by_seq: list[list[tuple[int,int,float,float]]] = []
     payment_rows = []
     shipment_rows = []
     refund_rows = []
 
     order_count = 22000
-    for _ in range(order_count):
+    for seq in range(order_count):
         cust = random.choice(customer_ids)
         order_ts = _utc(fake.date_time_between(start_date=start, end_date=now))
         channel = random.choices(["web", "mobile", "marketplace"], weights=[0.55, 0.30, 0.15])[0]
@@ -85,51 +85,46 @@ async def seed_all(conn: asyncpg.Connection) -> None:
         item_n = random.choices([1, 2, 3, 4], weights=[0.55, 0.25, 0.14, 0.06])[0]
         items = random.sample(product_ids, k=item_n)
         subtotal = 0.0
+        seq_items: list[tuple[int,int,float,float]] = []
         for pid in items:
             qty = random.choices([1, 2, 3], weights=[0.78, 0.18, 0.04])[0]
             unit = price_by_product[pid]
             discount = round(unit * qty * (0.0 if random.random() < 0.72 else random.uniform(0.05, 0.25)), 2)
             subtotal += unit * qty - discount
-            order_items_rows.append((pid, qty, unit, discount))  # order_id filled later
+            seq_items.append((pid, qty, unit, discount))
 
         shipping_cost = round(random.choices([0, 4.99, 7.99, 11.99], weights=[0.22, 0.44, 0.26, 0.08])[0], 2)
-        total = round(subtotal + shipping_cost, 2)
 
         # status flow
         paid = random.random() < 0.93
         cancelled = (not paid) and (random.random() < 0.65)
-        refunded = paid and (random.random() < 0.08)
+        status = "cancelled" if cancelled else ("paid" if paid else "placed")
 
-        status = "placed"
-        if cancelled:
-            status = "cancelled"
-        elif paid:
-            status = "paid"
+        order_rows.append((seq, cust, order_ts, status, channel, "USD", shipping_cost))
+        order_items_by_seq.append(seq_items)
 
-        order_rows.append((cust, order_ts, status, channel, "USD", shipping_cost, total))
-
-    # Insert orders and keep totals in a temp table via CTE
-    await conn.execute("create temp table tmp_orders(cust bigint, order_ts timestamptz, status text, channel text, currency text, shipping_cost numeric, total numeric) on commit drop")
+    # Insert orders with a stable sequence key so we can attach items reliably
+    await conn.execute(
+        "create temp table tmp_orders(seq int, cust bigint, order_ts timestamptz, status text, channel text, currency text, shipping_cost numeric) on commit drop"
+    )
     await conn.copy_records_to_table("tmp_orders", records=order_rows)
     inserted = await conn.fetch(
         """
         insert into orders(customer_id, order_ts, status, channel, currency, shipping_cost)
-        select cust, order_ts, status, channel, currency, shipping_cost from tmp_orders
-        returning order_id, order_ts, status
+        select cust, order_ts, status, channel, currency, shipping_cost
+        from tmp_orders
+        order by seq
+        returning order_id
         """
     )
-    order_ids = [r["order_id"] for r in inserted]
 
-    # attach items to orders
-    idx = 0
+    # Postgres returns rows in the same order as the INSERT ... SELECT
+    order_ids = [int(r["order_id"]) for r in inserted]
+
     items_with_order = []
-    for oid in order_ids:
-        # regenerate item count deterministically from oid
-        random.seed(oid)
-        item_n = random.choices([1, 2, 3, 4], weights=[0.55, 0.25, 0.14, 0.06])[0]
-        chunk = order_items_rows[idx : idx + item_n]
-        idx += item_n
-        for (pid, qty, unit, discount) in chunk:
+    for seq, items in enumerate(order_items_by_seq):
+        oid = order_ids[seq]
+        for (pid, qty, unit, discount) in items:
             items_with_order.append((oid, pid, qty, unit, discount))
 
     await conn.executemany(
