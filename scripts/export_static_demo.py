@@ -24,18 +24,19 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 OUT_DIR = BASE_DIR / "pages_demo" / "mock_output"
 
 
-def _iso(d: datetime) -> str:
-    return d.date().isoformat()
+def _date(d: datetime):
+    """Return a datetime.date for asyncpg bind params."""
+    return d.date()
 
 
 async def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(timezone.utc)
-    start_date = _iso(now - timedelta(days=90))
-    end_date = _iso(now)
-    start_month = (now.replace(day=1) - timedelta(days=180)).replace(day=1).date().isoformat()
-    end_month = now.replace(day=1).date().isoformat()
+    start_date = _date(now - timedelta(days=90))
+    end_date = _date(now)
+    start_month = (now.replace(day=1) - timedelta(days=180)).replace(day=1).date()
+    end_month = now.replace(day=1).date()
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
