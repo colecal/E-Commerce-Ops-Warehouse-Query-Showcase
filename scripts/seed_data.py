@@ -222,7 +222,7 @@ async def seed_all(conn: asyncpg.Connection) -> None:
           else o.status
         end
         from payments p
-        left join shipments s on s.order_id=o.order_id
+        left join shipments s on s.order_id=p.order_id
         where p.order_id=o.order_id;
         """
     )
