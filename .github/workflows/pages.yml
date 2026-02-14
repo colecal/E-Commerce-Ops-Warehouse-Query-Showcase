@@ -26,13 +26,39 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Start services
+      - name: Install Python dependencies
         run: |
-          docker compose up -d --build
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Export static demo JSON
+      - name: Start database service
         run: |
-          docker compose exec -T app python -m scripts.export_static_demo
+          docker compose up -d db
+
+      - name: Wait for database readiness
+        run: |
+          for i in {1..60}; do
+            if docker compose exec -T db pg_isready -U postgres -d warehouse; then
+              echo "Postgres is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Postgres did not become ready in time" >&2
+          docker compose logs db >&2 || true
+          exit 1
+
+      - name: Initialize DB schema + seed data
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/warehouse
+        run: |
+          python -m scripts.init_db
+
+      - name: Export static demo JSON (writes to pages_demo/mock_output)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/warehouse
+        run: |
+          python -m scripts.export_static_demo
 
       - name: Stop services
         if: always()
