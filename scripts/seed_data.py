@@ -104,8 +104,10 @@ async def seed_all(conn: asyncpg.Connection) -> None:
         order_items_by_seq.append(seq_items)
 
     # Insert orders with a stable sequence key so we can attach items reliably
+    # NOTE: avoid ON COMMIT DROP here because asyncpg executes each statement in its own implicit
+    # transaction; ON COMMIT DROP would drop the temp table immediately.
     await conn.execute(
-        "create temp table tmp_orders(seq int, cust bigint, order_ts timestamptz, status text, channel text, currency text, shipping_cost numeric) on commit drop"
+        "create temp table tmp_orders(seq int, cust bigint, order_ts timestamptz, status text, channel text, currency text, shipping_cost numeric)"
     )
     await conn.copy_records_to_table("tmp_orders", records=order_rows)
     inserted = await conn.fetch(
@@ -117,6 +119,7 @@ async def seed_all(conn: asyncpg.Connection) -> None:
         returning order_id
         """
     )
+    await conn.execute("drop table if exists tmp_orders")
 
     # Postgres returns rows in the same order as the INSERT ... SELECT
     order_ids = [int(r["order_id"]) for r in inserted]
